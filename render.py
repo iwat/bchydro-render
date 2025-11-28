@@ -1,12 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import StringIO
-import numpy as np
+import matplotlib.dates as mdates
 
 # --- 1. MOCK DATA SETUP ---
-# Replace this section with pd.read_csv('your_file_name.csv') once you have the file.
-# This mock data is just to make the script runnable.
-# It simulates data spanning 8 days (Jan 1st to Jan 8th) including a weekend.
+# NOTE: The mock data has been expanded to span multiple months and years (2024 and 2025)
+# to better demonstrate the annual comparison feature.
+# Remember to replace this section with pd.read_csv('your_file_name.csv') once you have your actual file.
 
 with open('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-2025-11-26-020019.csv', 'r') as f:
     csv_data = f.read()
@@ -25,66 +25,64 @@ df = df.set_index('Interval Start Date/Time')
 # Ensure 'Inflow (kWh)' is numeric
 df['Inflow (kWh)'] = pd.to_numeric(df['Inflow (kWh)'], errors='coerce')
 
+# *** NEW LOGIC FOR MULTI-YEAR COMPARISON ***
 
-# --- 3. IDENTIFY WEEKENDS FOR HIGHLIGHTING ---
+# 2a. Extract the actual year for grouping
+df['Year'] = df.index.year
 
-# Identify weekend days (Saturday=5, Sunday=6)
-# dt.dayofweek returns 0 for Monday and 6 for Sunday
-weekend_dates = df[df.index.dayofweek.isin([5, 6])].index.normalize().unique()
+# 2b. Create a common "Day Index" (Month/Day/Time) by setting a fixed year (e.g., 2000)
+# This aligns all data points on a single annual timeline for comparison.
+def get_day_index(dt):
+    """Sets a fixed year (2000) while preserving Month, Day, Hour, and Minute."""
+    return dt.replace(year=2000)
 
-# --- 4. PLOTTING ---
+df['DayIndex'] = df.index.map(get_day_index)
+
+# Group the DataFrame by the actual year
+yearly_groups = df.groupby('Year')
+
+
+# --- 3. PLOTTING ---
 
 # Create the figure and axes
 fig, ax = plt.subplots(figsize=(14, 7))
 
-# 4.1. Highlight Weekends (Shaded Columns)
-for date in weekend_dates:
-    # Calculate the start and end of the day for the shading
-    start_of_day = date
-    # We add 1 day to the date to get the end boundary of the shading
-    end_of_day = date + pd.Timedelta(days=1)
+# 3.1. Plot each year as a separate line
+for year, data in yearly_groups:
+    # Plot against the common 'DayIndex' for the X-axis
+    ax.plot(data['DayIndex'], data['Inflow (kWh)'],
+            label=f'Inflow {year} (kWh)',
+            linewidth=1.5,
+            marker='o',
+            markersize=3,
+            alpha=0.8,
+            zorder=3)
 
-    # Use axvspan to draw a vertical span (column) over the weekend period
-    ax.axvspan(start_of_day, end_of_day,
-               facecolor='#F0F8FF',  # Light Blue/Alice Blue color
-               alpha=0.5,            # Transparency
-               zorder=0,             # Ensure it stays behind the line plot
-               label='Weekend' if date == weekend_dates.min() else "") # Label only the first one
-
-# 4.2. Plot the Line Graph
-ax.plot(df.index, df['Inflow (kWh)'],
-        label='Inflow (kWh)',
-        color='#1f77b4', # Muted blue
-        linewidth=1.5,
-        marker='.',
-        markersize=3,
-        zorder=3)
-
-# --- 5. CUSTOMIZATION AND LABELS ---
+# --- 4. CUSTOMIZATION AND LABELS ---
 
 # Set title and labels
-ax.set_title('Energy Inflow (kWh) Over Time with Weekend Highlights', fontsize=16, pad=20)
-ax.set_xlabel('Interval Start Date/Time', fontsize=12)
+ax.set_title('Annual Energy Inflow (kWh) Comparison', fontsize=16, pad=20)
+ax.set_xlabel('Day of Year (Jan 1 to Dec 31)', fontsize=12)
 ax.set_ylabel('Inflow (kWh)', fontsize=12)
 
-# Format X-axis to show dates nicely
-# Use date formatters and locators for cleaner display
-import matplotlib.dates as mdates
-# *** MODIFIED: Use MonthLocator to render ticks only once a month ***
+# Format X-axis to show dates nicely, based on the common DayIndex
+# Use MonthLocator to render ticks only once a month
 ax.xaxis.set_major_locator(mdates.MonthLocator())
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m')) # Display Year and Month
+# Display Month and Day (since the year is fixed to 2000, we don't display it)
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
 
 # Add grid lines for better readability
-ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+ax.grid(True, which='major', axis='x', linestyle=':', linewidth=1.0, alpha=0.6)
+ax.grid(True, which='major', axis='y', linestyle='--', linewidth=0.5, alpha=0.7)
 
 # Rotate x-axis labels for better fit
 plt.xticks(rotation=45, ha='right')
 
 # Add legend and tight layout
-ax.legend(loc='upper right')
+ax.legend(loc='upper right', title="Year")
 plt.tight_layout()
 
 # Show the plot
 plt.show()
 
-print("Graph generated successfully. Check the pop-up window for the visualization.")
+print("Multi-year comparison graph generated successfully. Check the pop-up window for the visualization.")
