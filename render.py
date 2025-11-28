@@ -70,8 +70,9 @@ ax.set_ylabel('Inflow (kWh)', fontsize=12)
 # Format X-axis to show dates nicely
 # Use date formatters and locators for cleaner display
 import matplotlib.dates as mdates
-ax.xaxis.set_major_locator(mdates.DayLocator(interval=1)) # Show tick every day
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d\n%a')) # Display Date and Day of Week
+# *** MODIFIED: Use MonthLocator to render ticks only once a month ***
+ax.xaxis.set_major_locator(mdates.MonthLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m')) # Display Year and Month
 
 # Add grid lines for better readability
 ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
