@@ -8,15 +8,9 @@ import matplotlib.dates as mdates
 # Set to False to plot all data points at their original interval resolution.
 MERGE_DATA_DAILY = True
 
-# --- 1. MOCK DATA SETUP ---
-# NOTE: The mock data has been expanded slightly to better illustrate daily aggregation.
-# Remember to replace this section with pd.read_csv('your_file_name.csv') once you have your actual file.
+# --- 1. DATA SETUP ---
 
-with open('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-2025-11-26-020019.csv', 'r') as f:
-    csv_data = f.read()
-
-# Simulate reading the CSV data
-df = pd.read_csv(StringIO(csv_data), skipinitialspace=True)
+df = pd.read_csv('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-2025-11-26-020019.csv', skipinitialspace=True)
 
 # --- 2. DATA CLEANING AND PREPARATION ---
 
