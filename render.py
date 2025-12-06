@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from glob import glob
 from io import StringIO
 import matplotlib.dates as mdates
 
@@ -10,7 +11,8 @@ MERGE_DATA_DAILY = True
 
 # --- 1. DATA SETUP ---
 
-df = pd.read_csv('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-2025-11-26-020019.csv', skipinitialspace=True)
+df_list = [pd.read_csv(file) for file in glob('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-*.csv')]
+df = pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 # --- 2. DATA CLEANING AND PREPARATION ---
 
