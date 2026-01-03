@@ -1,103 +1,79 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from glob import glob
-from io import StringIO
 import matplotlib.dates as mdates
-
-# --- FEATURE FLAG ---
-# Set to True to sum all data points within the same day into a single daily total.
-# Set to False to plot all data points at their original interval resolution.
-MERGE_DATA_DAILY = True
+from datetime import timedelta
 
 # --- 1. DATA SETUP ---
-
 df_list = [pd.read_csv(file) for file in glob('/Users/powfamily/Dropbox/Oom & Wat/10-19 Life admin/12 Where I live & how I get around/12.21 Electricity, gas, & water/bchydro.com-consumption-XXXXXXXX2202-*.csv')]
 df = pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 # --- 2. DATA CLEANING AND PREPARATION ---
-
-# Convert the "Interval Start Date/Time" column to proper datetime objects
 df['Interval Start Date/Time'] = pd.to_datetime(df['Interval Start Date/Time'], format='%Y-%m-%d %H:%M')
-
-# Set the datetime column as the index for time-series plotting
-df = df.set_index('Interval Start Date/Time')
-
-# Ensure 'Inflow (kWh)' is numeric
+df = df.set_index('Interval Start Date/Time').sort_index()
 df['Inflow (kWh)'] = pd.to_numeric(df['Inflow (kWh)'], errors='coerce')
 
-# *** NEW LOGIC FOR CONDITIONAL DAILY AGGREGATION ***
-if MERGE_DATA_DAILY:
-    # 2a. Resample the data to daily frequency and sum the Inflow (kWh)
-    # This aggregates all records within a 24hr period into one sum.
-    df_aggregated = df['Inflow (kWh)'].resample('D').sum().to_frame()
+df = df['Inflow (kWh)'].resample('D').sum().to_frame()
+df = df[df['Inflow (kWh)'] > 0]
 
-    # Remove days where the sum is 0 (i.e., days without data) which might occur due to resampling
-    df_aggregated = df_aggregated[df_aggregated['Inflow (kWh)'] > 0]
-
-    # Use the aggregated data frame for further processing
-    df = df_aggregated
-
-# 2b. Extract the actual year for grouping (now from the aggregated index or original index)
+# Extract Year for grouping
 df['Year'] = df.index.year
 
-# 2c. Create a common "Day Index" (Month/Day/Time) by setting a fixed year (e.g., 2000)
-# This aligns all data points on a single annual timeline for comparison.
-def get_day_index(dt):
-    """Sets a fixed year (2000) while preserving Month, Day, Hour, and Minute/00:00."""
-    return dt.replace(year=2000, hour=0, minute=0, second=0, microsecond=0)
-
-df['DayIndex'] = df.index.map(get_day_index)
-
-# Group the DataFrame by the actual year
-yearly_groups = df.groupby('Year')
-
-
 # --- 3. PLOTTING ---
+fig, ax = plt.subplots(figsize=(16, 8))
 
-# Create the figure and axes
-fig, ax = plt.subplots(figsize=(14, 7))
+years = sorted(df['Year'].unique())
 
-# 3.1. Plot each year as a separate line
-for year, data in yearly_groups:
-    # Determine the marker size and line style based on aggregation status
-    marker_style = '.' if not MERGE_DATA_DAILY else 'o'
-    line_width = 1.5 if not MERGE_DATA_DAILY else 2.5
+# Get the color list from the public API
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colors = prop_cycle.by_key()['color']
 
-    # Plot against the common 'DayIndex' for the X-axis
-    ax.plot(data['DayIndex'], data['Inflow (kWh)'],
-            label=f'Inflow {year} (kWh)',
-            linewidth=line_width,
-            marker=marker_style,
-            markersize=5,
-            alpha=0.8,
-            zorder=3)
+for i, year in enumerate(years):
+    # 1. Get data for the current year
+    year_data = df[df['Year'] == year].copy()
+    if year_data.empty:
+        continue
 
-# --- 4. CUSTOMIZATION AND LABELS ---
+    # 2. Find the first Sunday on or before Jan 1st of this year
+    first_day = pd.Timestamp(year=year, month=1, day=1)
+    # weekday() returns 0 for Monday, 6 for Sunday.
+    # To get to the previous Sunday: (day.weekday() + 1) % 7
+    days_to_subtract = (first_day.weekday() + 1) % 7
+    start_date = first_day - timedelta(days=days_to_subtract)
 
-# Update title based on aggregation status
-title_suffix = " (Daily Total)" if MERGE_DATA_DAILY else " (Interval Data)"
-ax.set_title(f'Annual Energy Inflow (kWh) Comparison{title_suffix}', fontsize=16, pad=20)
-ax.set_xlabel('Day of Year (Jan 1 to Dec 31)', fontsize=12)
-ax.set_ylabel('Inflow (kWh) Total' if MERGE_DATA_DAILY else 'Inflow (kWh) Interval', fontsize=12)
+    # 3. Get the "Padded" data (from the previous year's end)
+    padded_data = df[(df.index >= start_date) & (df.index < first_day)].copy()
 
-# Format X-axis to show dates nicely, based on the common DayIndex
-# Use MonthLocator to render ticks only once a month
-ax.xaxis.set_major_locator(mdates.MonthLocator())
-# Display Month and Day (since the year is fixed to 2000, we don't display it)
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    # 4. Create a "Relative Day" index (0 = first Sunday, 1 = Monday...)
+    # This aligns every year so they all start on 'Day 0' (Sunday)
+    year_data['RelDay'] = (year_data.index - start_date).days
+    padded_data['RelDay'] = (padded_data.index - start_date).days
 
-# Add grid lines for better readability
-ax.grid(True, which='major', axis='x', linestyle=':', linewidth=1.0, alpha=0.6)
-ax.grid(True, which='major', axis='y', linestyle='--', linewidth=0.5, alpha=0.7)
+    # Select color using the loop index
+    color = colors[i % len(colors)]
 
-# Rotate x-axis labels for better fit
-plt.xticks(rotation=45, ha='right')
+    # Plot Padded Data (Dotted)
+    if not padded_data.empty:
+        ax.plot(padded_data['RelDay'], padded_data['Inflow (kWh)'],
+                color=color, linestyle=':', alpha=0.5, linewidth=2)
 
-# Add legend and tight layout
-ax.legend(loc='upper right', title="Year")
+    # Plot Actual Year Data (Solid)
+    ax.plot(year_data['RelDay'], year_data['Inflow (kWh)'],
+            label=f'Year {year}', color=color, linestyle='-',
+            marker='o', markersize=4)
+
+# --- 4. CUSTOMIZATION ---
+
+# Custom x-axis: Instead of dates, we show "Week Numbers" or "Days"
+# Since 365 days / 7 = ~52 weeks, we can mark every 7 days (Sundays)
+ax.set_xticks([i for i in range(0, 372, 7)])
+ax.set_xticklabels([f"Wk {i//7 + 1}" for i in range(0, 372, 7)])
+
+ax.set_title(f'Energy Inflow: Week-Aligned Comparison (Starting Sunday)', fontsize=16)
+ax.set_xlabel('Week of Year (Aligned to Sunday)', fontsize=12)
+ax.set_ylabel('Inflow (kWh)', fontsize=12)
+ax.grid(True, which='both', linestyle='--', alpha=0.5)
+ax.legend(title="Year", bbox_to_anchor=(1.05, 1), loc='upper left')
+
 plt.tight_layout()
-
-# Show the plot
 plt.show()
-
-print(f"Graph generated successfully. Data aggregation set to: {'Daily Sum' if MERGE_DATA_DAILY else 'Interval Data'}.")
